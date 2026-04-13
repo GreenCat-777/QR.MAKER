@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QR Generator</title>
+<script src="https://unpkg.com/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0c0e;--surface:#141417;--surface2:#1a1a1f;--surface3:#202026;
+  --border:#252530;--accent:#e8ff5a;--text:#f0f0f0;--muted:#444;--muted2:#777;
+}
+body{background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:2rem 1rem 5rem}
+.container{width:100%;max-width:900px;display:flex;flex-direction:column;gap:1.5rem}
+h1{font-family:'Syne',sans-serif;font-size:2rem;font-weight:800;letter-spacing:-.03em;color:var(--accent);line-height:1}
+.subtitle{font-size:.68rem;color:var(--muted2);letter-spacing:.08em;text-transform:uppercase;margin-top:.2rem}
+.main-grid{display:grid;grid-template-columns:1fr 290px;gap:1.5rem;align-items:start}
+@media(max-width:660px){.main-grid{grid-template-columns:1fr}.qr-panel{order:-1}}
+.left-col{display:flex;flex-direction:column;gap:1rem}
+
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.panel-title{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted2);padding:.65rem 1rem;border-bottom:1px solid var(--border);background:var(--surface2)}
+.panel-body{padding:1rem;display:flex;flex-direction:column;gap:.9rem}
+.sep{height:1px;background:var(--border);margin:.1rem -1rem}
+
+.field{display:flex;flex-direction:column;gap:.3rem}
+.flabel{font-size:.62rem;color:var(--muted2);letter-spacing:.06em;text-transform:uppercase}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:.7rem}
+
+/* all text inputs and selects */
+input[type=text],select{
+  background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  font-family:'DM Mono',monospace;font-size:.82rem;padding:.55rem .8rem;
+  border-radius:6px;outline:none;width:100%;transition:border-color .15s
+}
+input[type=text]:focus,select:focus{border-color:var(--accent)}
+input[type=text]::placeholder{color:var(--muted)}
+
+/* shape picker */
+.shape-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.45rem}
+.shape-opt{
+  display:flex;flex-direction:column;align-items:center;gap:.28rem;
+  padding:.45rem .15rem;border:1px solid var(--border);border-radius:6px;
+  cursor:pointer;background:var(--surface2);transition:all .12s;
+  font-size:.56rem;color:var(--muted2);letter-spacing:.04em;text-transform:uppercase;user-select:none
+}
+.shape-opt:hover{border-color:#3a3a46;color:var(--text)}
+.shape-opt.active{border-color:var(--accent);color:var(--accent);background:rgba(232,255,90,.06)}
+.shape-icon{width:26px;height:26px}
+
+/* color row: swatch + hex box */
+.color-field{display:flex;align-items:center;gap:.5rem}
+.swatch-btn{
+  width:34px;height:34px;border-radius:5px;border:1px solid var(--border);
+  flex-shrink:0;position:relative;overflow:hidden;cursor:pointer
+}
+.swatch-btn input[type=color]{
+  position:absolute;inset:-6px;width:calc(100%+12px);height:calc(100%+12px);
+  opacity:0;cursor:pointer;border:none;padding:0
+}
+.hex-box{
+  flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);
+  font-family:'DM Mono',monospace;font-size:.8rem;padding:.42rem .65rem;
+  border-radius:6px;outline:none;min-width:0;letter-spacing:.04em;transition:border-color .15s
+}
+.hex-box:focus{border-color:var(--accent)}
+.hex-box.bad{border-color:#ff5555}
+
+/* toggle */
+.tog{display:flex;align-items:center;gap:.4rem;font-size:.67rem;color:var(--muted2);cursor:pointer;user-select:none}
+input[type=checkbox]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer;flex-shrink:0}
+
+/* gradient row */
+.grad-opts{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-bottom:.3rem}
+
+/* logo drop */
+.logo-drop{
+  border:1px dashed var(--border);border-radius:6px;padding:.7rem;
+  text-align:center;cursor:pointer;font-size:.72rem;color:var(--muted2);
+  transition:all .15s;position:relative
+}
+.logo-drop:hover{border-color:#3a3a46;color:var(--text)}
+.logo-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.logo-drop.has-logo{border-color:var(--accent);color:var(--accent)}
+
+/* QR panel */
+.qr-panel{position:sticky;top:1.5rem;display:flex;flex-direction:column;gap:.7rem}
+.qr-stage{
+  background:var(--surface);border:1px solid var(--border);border-radius:10px;
+  padding:1.25rem;display:flex;align-items:center;justify-content:center;
+  min-height:230px;position:relative
+}
+#qrCanvas canvas,#qrCanvas svg{border-radius:3px;max-width:100%}
+.live-dot{
+  position:absolute;top:.6rem;right:.7rem;display:flex;align-items:center;gap:.3rem;
+  font-size:.55rem;letter-spacing:.07em;text-transform:uppercase;color:var(--accent)
+}
+.live-dot::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--accent);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+.dl-row{display:grid;grid-template-columns:1fr 1fr;gap:.5rem}
+.btn-dl{
+  background:var(--surface2);color:var(--text);font-family:'DM Mono',monospace;
+  font-size:.75rem;padding:.52rem .7rem;border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;transition:background .15s;text-align:center
+}
+.btn-dl:hover{background:var(--surface3)}
+.errmsg{font-size:.7rem;color:#ff6060;text-align:center;min-height:.9rem}
+.sublabel{font-size:.62rem;color:var(--muted2);letter-spacing:.06em;text-transform:uppercase;display:block}
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <h1>QR_GEN</h1>
+    <p class="subtitle">hex colors · shapes · gradients · logo recolor · live preview · no redirects</p>
+  </header>
+
+  <div class="main-grid">
+    <div class="left-col">
+
+      <!-- Content -->
+      <div class="panel">
+        <div class="panel-title">Content</div>
+        <div class="panel-body">
+          <div class="field">
+            <span class="flabel">URL or Text</span>
+            <input type="text" id="urlInput" placeholder="https://... or any text" autocomplete="off" spellcheck="false"/>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <span class="flabel">Size (px)</span>
+              <select id="sizeSelect">
+                <option value="200">200</option>
+                <option value="300" selected>300</option>
+                <option value="400">400</option>
+                <option value="500">500</option>
+              </select>
+            </div>
+            <div class="field">
+              <span class="flabel">Error Correction</span>
+              <select id="ecSelect">
+                <option value="L">Low (L)</option>
+                <option value="M" selected>Medium (M)</option>
+                <option value="Q">Quartile (Q)</option>
+                <option value="H">High (H)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Dot Shape -->
+      <div class="panel">
+        <div class="panel-title">Dot Shape</div>
+        <div class="panel-body">
+          <div class="shape-grid" id="dotShapeGrid"></div>
+        </div>
+      </div>
+
+      <!-- Corner Styles -->
+      <div class="panel">
+        <div class="panel-title">Corner Styles</div>
+        <div class="panel-body">
+          <span class="sublabel">Corner Square</span>
+          <div class="shape-grid" id="csGrid"></div>
+          <div class="sep"></div>
+          <span class="sublabel" style="margin-top:.2rem">Corner Dot</span>
+          <div class="shape-grid" id="cdGrid"></div>
+        </div>
+      </div>
+
+      <!-- Colors -->
+      <div class="panel">
+        <div class="panel-title">Colors</div>
+        <div class="panel-body">
+
+          <!-- Dot color -->
+          <div class="field">
+            <span class="flabel">Dot Color</span>
+            <div class="grad-opts">
+              <label class="tog"><input type="checkbox" id="dotGrad"/> Gradient</label>
+              <select id="dotGradType" style="display:none;padding:.3rem .5rem;font-size:.7rem;width:auto">
+                <option value="linear">Linear</option>
+                <option value="radial">Radial</option>
+              </select>
+            </div>
+            <div class="color-field">
+              <div class="swatch-btn" id="dotC1Swatch" style="background:#000000">
+                <input type="color" id="dotC1Native" value="#000000"/>
+              </div>
+              <input type="text" class="hex-box" id="dotC1Hex" value="#000000" maxlength="7" placeholder="#000000"/>
+            </div>
+            <div class="color-field" id="dotC2Row" style="display:none;margin-top:.35rem">
+              <div class="swatch-btn" id="dotC2Swatch" style="background:#6600ff">
+                <input type="color" id="dotC2Native" value="#6600ff"/>
+              </div>
+              <input type="text" class="hex-box" id="dotC2Hex" value="#6600ff" maxlength="7" placeholder="#6600ff"/>
+            </div>
+          </div>
+
+          <!-- Background color -->
+          <div class="field">
+            <span class="flabel">Background</span>
+            <div class="grad-opts">
+              <label class="tog"><input type="checkbox" id="bgTransparent"/> Transparent</label>
+              <label class="tog"><input type="checkbox" id="bgGrad"/> Gradient</label>
+              <select id="bgGradType" style="display:none;padding:.3rem .5rem;font-size:.7rem;width:auto">
+                <option value="linear">Linear</option>
+                <option value="radial">Radial</option>
+              </select>
+            </div>
+            <div class="color-field" id="bgC1Row">
+              <div class="swatch-btn" id="bgC1Swatch" style="background:#ffffff">
+                <input type="color" id="bgC1Native" value="#ffffff"/>
+              </div>
+              <input type="text" class="hex-box" id="bgC1Hex" value="#ffffff" maxlength="7" placeholder="#ffffff"/>
+            </div>
+            <div class="color-field" id="bgC2Row" style="display:none;margin-top:.35rem">
+              <div class="swatch-btn" id="bgC2Swatch" style="background:#e0e0e0">
+                <input type="color" id="bgC2Native" value="#e0e0e0"/>
+              </div>
+              <input type="text" class="hex-box" id="bgC2Hex" value="#e0e0e0" maxlength="7" placeholder="#e0e0e0"/>
+            </div>
+          </div>
+
+          <!-- Corner colors -->
+          <div class="row2">
+            <div class="field">
+              <span class="flabel">Corner Square Color</span>
+              <label class="tog" style="margin:.2rem 0"><input type="checkbox" id="csMatchDot" checked/> Match dots</label>
+              <div class="color-field" id="csColorRow" style="display:none">
+                <div class="swatch-btn" id="csSwatch" style="background:#000000">
+                  <input type="color" id="csNative" value="#000000"/>
+                </div>
+                <input type="text" class="hex-box" id="csHex" value="#000000" maxlength="7" placeholder="#000000"/>
+              </div>
+            </div>
+            <div class="field">
+              <span class="flabel">Corner Dot Color</span>
+              <label class="tog" style="margin:.2rem 0"><input type="checkbox" id="cdMatchDot" checked/> Match dots</label>
+              <div class="color-field" id="cdColorRow" style="display:none">
+                <div class="swatch-btn" id="cdSwatch" style="background:#000000">
+                  <input type="color" id="cdNative" value="#000000"/>
+                </div>
+                <input type="text" class="hex-box" id="cdHex" value="#000000" maxlength="7" placeholder="#000000"/>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Logo -->
+      <div class="panel">
+        <div class="panel-title">Logo / Image (optional)</div>
+        <div class="panel-body">
+          <div class="logo-drop" id="logoDrop">
+            <input type="file" id="logoFile" accept="image/*"/>
+            <span id="logoLabel">Click or drop an image (PNG, JPG…)</span>
+          </div>
+          <div class="row2" id="logoOpts" style="display:none">
+            <div class="field">
+              <span class="flabel">Logo Size</span>
+              <select id="logoSize">
+                <option value="0.15">15%</option>
+                <option value="0.2">20%</option>
+                <option value="0.25" selected>25%</option>
+                <option value="0.3">30%</option>
+                <option value="0.35">35%</option>
+              </select>
+            </div>
+            <div class="field">
+              <span class="flabel">Margin</span>
+              <select id="logoMargin">
+                <option value="0">None</option>
+                <option value="5" selected>Small</option>
+                <option value="10">Medium</option>
+                <option value="20">Large</option>
+              </select>
+            </div>
+          </div>
+          <label class="tog" id="recolorWrap" style="display:none">
+            <input type="checkbox" id="recolorLogo" checked/>
+            Recolor logo to match QR colors
+          </label>
+          <button class="btn-dl" id="clearLogo" style="display:none">Remove Logo</button>
+        </div>
+      </div>
+
+    </div><!-- /left-col -->
+
+    <!-- QR Preview -->
+    <div class="qr-panel">
+      <div class="qr-stage">
+        <div class="live-dot">live</div>
+        <div id="qrCanvas"></div>
+      </div>
+      <p class="errmsg" id="errMsg"></p>
+      <div class="dl-row">
+        <button class="btn-dl" onclick="dl('png')">↓ PNG</button>
+        <button class="btn-dl" onclick="dl('svg')">↓ SVG</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+<script>
+// ── Helpers ──────────────────────────────────────────────────────────────────
+function isValidHex(h){ return /^#[0-9a-fA-F]{6}$/.test(h) }
+function normHex(h){
+  h=h.trim();
+  if(!h.startsWith('#')) h='#'+h;
+  if(h.length===4) h='#'+h[1]+h[1]+h[2]+h[2]+h[3]+h[3];
+  return h.toLowerCase();
+}
+function hexToRgb(hex){
+  hex=normHex(hex);
+  return [parseInt(hex.slice(1,3),16),parseInt(hex.slice(3,5),16),parseInt(hex.slice(5,7),16)];
+}
+
+// ── Color pair binding: native color input <-> hex text box <-> swatch div ───
+// All three stay in sync. Any change fires scheduleLive().
+function bindColor(nativeId, hexBoxId, swatchId){
+  const nat=document.getElementById(nativeId);
+  const box=document.getElementById(hexBoxId);
+  const sw =document.getElementById(swatchId);
+
+  // Native picker changed → update box + swatch
+  nat.addEventListener('input',()=>{
+    const h=nat.value;
+    box.value=h;
+    box.classList.remove('bad');
+    sw.style.background=h;
+    scheduleLive();
+  });
+
+  // Hex box typed → validate, update picker + swatch
+  box.addEventListener('input',()=>{
+    let h=normHex(box.value);
+    if(isValidHex(h)){
+      box.classList.remove('bad');
+      nat.value=h;
+      sw.style.background=h;
+      scheduleLive();
+    } else {
+      box.classList.add('bad');
+    }
+  });
+  box.addEventListener('blur',()=>{
+    // on blur, snap back to current valid value if box is invalid
+    if(box.classList.contains('bad')){
+      box.value=nat.value;
+      box.classList.remove('bad');
+    }
+  });
+}
+
+bindColor('dotC1Native','dotC1Hex','dotC1Swatch');
+bindColor('dotC2Native','dotC2Hex','dotC2Swatch');
+bindColor('bgC1Native','bgC1Hex','bgC1Swatch');
+bindColor('bgC2Native','bgC2Hex','bgC2Swatch');
+bindColor('csNative','csHex','csSwatch');
+bindColor('cdNative','cdHex','cdSwatch');
+
+// ── Shapes ───────────────────────────────────────────────────────────────────
+const dotShapes=[
+  {id:'square',      label:'Square',  svg:`<rect x="4" y="4" width="20" height="20"/>`},
+  {id:'rounded',     label:'Rounded', svg:`<rect x="4" y="4" width="20" height="20" rx="6"/>`},
+  {id:'dots',        label:'Dots',    svg:`<circle cx="14" cy="14" r="10"/>`},
+  {id:'classy',      label:'Classy',  svg:`<path d="M4 14L14 4L24 14L14 24Z"/>`},
+  {id:'classy-rounded',label:'Classy+',svg:`<path d="M4 14Q4 4 14 4Q24 4 24 14Q24 24 14 24Q4 24 4 14Z"/>`},
+  {id:'extra-rounded',label:'X-Round',svg:`<rect x="4" y="4" width="20" height="20" rx="10"/>`},
+];
+const csShapes=[
+  {id:'square',        label:'Square',  svg:`<rect x="3" y="3" width="22" height="22" fill="none" stroke="currentColor" stroke-width="3"/>`},
+  {id:'extra-rounded', label:'Rounded', svg:`<rect x="3" y="3" width="22" height="22" rx="8" fill="none" stroke="currentColor" stroke-width="3"/>`},
+  {id:'dot',           label:'Circle',  svg:`<circle cx="14" cy="14" r="11" fill="none" stroke="currentColor" stroke-width="3"/>`},
+  {id:'',              label:'None',    svg:`<line x1="5" y1="5" x2="23" y2="23" stroke="currentColor" stroke-width="2"/><line x1="23" y1="5" x2="5" y2="23" stroke="currentColor" stroke-width="2"/>`},
+];
+const cdShapes=[
+  {id:'square',  label:'Square',  svg:`<rect x="7" y="7" width="14" height="14"/>`},
+  {id:'dot',     label:'Circle',  svg:`<circle cx="14" cy="14" r="7"/>`},
+  {id:'rounded', label:'Rounded', svg:`<rect x="7" y="7" width="14" height="14" rx="4"/>`},
+  {id:'',        label:'None',    svg:`<line x1="7" y1="7" x2="21" y2="21" stroke="currentColor" stroke-width="2"/><line x1="21" y1="7" x2="7" y2="21" stroke="currentColor" stroke-width="2"/>`},
+];
+
+const sel={dot:'square',cs:'square',cd:'square'};
+
+function buildGrid(containerId, shapes, key){
+  const grid=document.getElementById(containerId);
+  shapes.forEach(s=>{
+    const d=document.createElement('div');
+    d.className='shape-opt'+(sel[key]===s.id?' active':'');
+    d.innerHTML=`<svg class="shape-icon" viewBox="0 0 28 28" fill="currentColor">${s.svg}</svg><span>${s.label}</span>`;
+    d.addEventListener('click',()=>{
+      grid.querySelectorAll('.shape-opt').forEach(x=>x.classList.remove('active'));
+      d.classList.add('active');
+      sel[key]=s.id;
+      scheduleLive();
+    });
+    grid.appendChild(d);
+  });
+}
+buildGrid('dotShapeGrid',dotShapes,'dot');
+buildGrid('csGrid',csShapes,'cs');
+buildGrid('cdGrid',cdShapes,'cd');
+
+// ── Toggle wiring ─────────────────────────────────────────────────────────────
+document.getElementById('dotGrad').addEventListener('change',function(){
+  document.getElementById('dotC2Row').style.display=this.checked?'flex':'none';
+  document.getElementById('dotGradType').style.display=this.checked?'block':'none';
+  scheduleLive();
+});
+document.getElementById('bgGrad').addEventListener('change',function(){
+  document.getElementById('bgC2Row').style.display=this.checked?'flex':'none';
+  document.getElementById('bgGradType').style.display=this.checked?'block':'none';
+  scheduleLive();
+});
+document.getElementById('bgTransparent').addEventListener('change',function(){
+  document.getElementById('bgC1Row').style.opacity=this.checked?'0.35':'1';
+  document.getElementById('bgC1Row').style.pointerEvents=this.checked?'none':'auto';
+  scheduleLive();
+});
+document.getElementById('csMatchDot').addEventListener('change',function(){
+  document.getElementById('csColorRow').style.display=this.checked?'none':'flex';
+  scheduleLive();
+});
+document.getElementById('cdMatchDot').addEventListener('change',function(){
+  document.getElementById('cdColorRow').style.display=this.checked?'none':'flex';
+  scheduleLive();
+});
+
+// selects
+['sizeSelect','ecSelect','dotGradType','bgGradType','logoSize','logoMargin'].forEach(id=>{
+  document.getElementById(id).addEventListener('change',()=>scheduleLive());
+});
+
+// url input
+document.getElementById('urlInput').addEventListener('input',()=>scheduleLive());
+
+// ── Logo ──────────────────────────────────────────────────────────────────────
+let logoDataUrl=null;
+document.getElementById('logoFile').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    logoDataUrl=ev.target.result;
+    document.getElementById('logoLabel').textContent=f.name;
+    document.getElementById('logoDrop').classList.add('has-logo');
+    document.getElementById('logoOpts').style.display='grid';
+    document.getElementById('recolorWrap').style.display='flex';
+    document.getElementById('clearLogo').style.display='block';
+    scheduleLive();
+  };
+  r.readAsDataURL(f);
+});
+document.getElementById('clearLogo').addEventListener('click',()=>{
+  logoDataUrl=null;
+  document.getElementById('logoLabel').textContent='Click or drop an image (PNG, JPG…)';
+  document.getElementById('logoDrop').classList.remove('has-logo');
+  document.getElementById('logoOpts').style.display='none';
+  document.getElementById('recolorWrap').style.display='none';
+  document.getElementById('clearLogo').style.display='none';
+  document.getElementById('logoFile').value='';
+  scheduleLive();
+});
+document.getElementById('recolorLogo').addEventListener('change',()=>scheduleLive());
+
+// ── Live preview scheduler ────────────────────────────────────────────────────
+let liveTimer=null;
+let isRunning=false;
+let pendingAfter=false;
+
+function scheduleLive(){
+  clearTimeout(liveTimer);
+  liveTimer=setTimeout(()=>runGenerate(), 180);
+}
+
+async function runGenerate(){
+  if(isRunning){ pendingAfter=true; return; }
+  isRunning=true;
+  await generate();
+  isRunning=false;
+  if(pendingAfter){ pendingAfter=false; runGenerate(); }
+}
+
+// ── Logo recolor ──────────────────────────────────────────────────────────────
+function recolorImage(dataUrl, darkHex){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.createElement('canvas');
+      c.width=img.width; c.height=img.height;
+      const ctx=c.getContext('2d');
+      ctx.drawImage(img,0,0);
+      const id=ctx.getImageData(0,0,c.width,c.height);
+      const d=id.data;
+      const dk=hexToRgb(darkHex);
+      for(let i=0;i<d.length;i+=4){
+        const lum=(0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])/255;
+        // dark pixels -> dot color, light pixels -> transparent
+        d[i]  =dk[0];
+        d[i+1]=dk[1];
+        d[i+2]=dk[2];
+        d[i+3]=Math.round((1-lum)*d[i+3]);
+      }
+      ctx.putImageData(id,0,0);
+      resolve(c.toDataURL('image/png'));
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+
+// ── Generate ──────────────────────────────────────────────────────────────────
+let qrInstance=null;
+
+function getHex(nativeId){ return document.getElementById(nativeId).value; }
+
+function buildColorCfg(isGrad, c1Id, c2Id, gradTypeId){
+  const c1=getHex(c1Id);
+  if(!isGrad) return {color:c1};
+  return {gradient:{
+    type:document.getElementById(gradTypeId).value,
+    rotation:0,
+    colorStops:[{offset:0,color:c1},{offset:1,color:getHex(c2Id)}]
+  }};
+}
+
+async function generate(){
+  const text=document.getElementById('urlInput').value.trim();
+  const err=document.getElementById('errMsg');
+  err.textContent='';
+  if(!text) return;
+
+  const size   =parseInt(document.getElementById('sizeSelect').value);
+  const ec     =document.getElementById('ecSelect').value;
+  const transp =document.getElementById('bgTransparent').checked;
+  const dotGrad=document.getElementById('dotGrad').checked;
+  const bgGrad =document.getElementById('bgGrad').checked;
+  const csMatch=document.getElementById('csMatchDot').checked;
+  const cdMatch=document.getElementById('cdMatchDot').checked;
+
+  const dotCfg=buildColorCfg(dotGrad,'dotC1Native','dotC2Native','dotGradType');
+  const bgCfg =transp?{color:'rgba(0,0,0,0)'}:buildColorCfg(bgGrad,'bgC1Native','bgC2Native','bgGradType');
+  const csCfg =csMatch?dotCfg:{color:getHex('csNative')};
+  const cdCfg =cdMatch?dotCfg:{color:getHex('cdNative')};
+
+  const opts={
+    width:size, height:size, type:'canvas', data:text,
+    qrOptions:{errorCorrectionLevel:ec},
+    dotsOptions:{type:sel.dot,...dotCfg},
+    backgroundOptions:bgCfg,
+    cornersSquareOptions:sel.cs?{type:sel.cs,...csCfg}:{},
+    cornersDotOptions:sel.cd?{type:sel.cd,...cdCfg}:{},
+  };
+
+  if(logoDataUrl){
+    let logo=logoDataUrl;
+    if(document.getElementById('recolorLogo').checked){
+      const dk=getHex('dotC1Native');
+      logo=await recolorImage(logoDataUrl,dk);
+    }
+    opts.image=logo;
+    opts.imageOptions={
+      hideBackgroundDots:true,
+      imageSize:parseFloat(document.getElementById('logoSize').value),
+      margin:parseInt(document.getElementById('logoMargin').value),
+      crossOrigin:'anonymous',
+    };
+  }
+
+  const container=document.getElementById('qrCanvas');
+  container.innerHTML='';
+  try{
+    qrInstance=new QRCodeStyling(opts);
+    qrInstance.append(container);
+  }catch(e){
+    err.textContent='generation failed — shorten text or lower error correction';
+  }
+}
+
+function dl(ext){
+  if(!qrInstance){ alert('Generate a QR first'); return; }
+  qrInstance.download({name:'qrcode',extension:ext});
+}
+
+// init — generate once page loads if there's default content
+generate();
+</script>
+</body>
+</html>
